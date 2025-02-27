@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package exchange;
+
+option go_package = "oxeeee.exhange.v1;exchangev1";
+
+service Exchange {
+    rpc Convert(ConvertRequest) returns (ConvertResponse);
+}
+
+message ConvertRequest {
+    string origial_currency_type = 1;
+    float original_currency_value = 2;
+    string converted_currency_type = 3;
+}
+
+message ConvertResponse {
+    string converted_currency_type = 1;
+    float converted_currency_value = 2;
+}
