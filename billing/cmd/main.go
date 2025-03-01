@@ -5,6 +5,15 @@ import (
 	"os"
 
 	"github.com/Oxeeee/bank-microservices/billing/internal/config"
+	"github.com/Oxeeee/bank-microservices/billing/internal/db"
+	"github.com/Oxeeee/bank-microservices/billing/internal/repo"
+	"github.com/Oxeeee/bank-microservices/billing/internal/service"
+)
+
+const (
+	envLocal = "local"
+	envDev   = "dev"
+	envProd  = "prod"
 )
 
 func main() {
@@ -13,6 +22,15 @@ func main() {
 	log := setupLogger(cfg.Env)
 	log.Info("starting application")
 
+	database := db.InitDB(cfg)
+	redis := db.InitRedis(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
+
+	cacheRepo := repo.NewBillingCache(redis)
+	dbRepo := repo.NewBillingRepository(database)
+
+	service := service.NewBillingService(log, cfg, dbRepo, cacheRepo)
+	
+	
 }
 
 func setupLogger(env string) *slog.Logger {
