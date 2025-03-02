@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Env      string     `yaml:"env" env-default:"local"`
 	GRPC     GRPCConfig `yaml:"grpc"`
+	RESTPort int        `yaml:"rest_port"`
 	Database `yaml:"database" env-required:"true"`
 	Redis    `yaml:"redis" env-required:"true"`
 }
@@ -24,7 +25,7 @@ type Database struct {
 	Address  string `yaml:"address"`
 	Port     int    `yaml:"port"`
 	Name     string `yaml:"name"`
-	SSLMode  bool   `yaml:"ssl_mode"`
+	SSLMode  string `yaml:"ssl_mode"`
 }
 
 type Redis struct {

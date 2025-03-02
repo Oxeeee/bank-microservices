@@ -1,37 +1,20 @@
 package app
 
 import (
-	"fmt"
 	"log/slog"
-	"net/http"
-	"time"
 
-	loggerinterceptors "github.com/Oxeeee/bank-microservices/billing/pkg/logger_interceptors"
+	restapp "github.com/Oxeeee/bank-microservices/billing/internal/app/rest"
+	"github.com/Oxeeee/bank-microservices/billing/internal/service"
 )
 
 type App struct {
-	log    *slog.Logger
-	server *http.Server
-	port   int
+	RESTSrv *restapp.App
 }
 
-func New(log *slog.Logger, grpcAddr string, restPort int) *App {
-	mux := http.NewServeMux()
-	
-	
-	
-	loggedMux := loggerinterceptors.LoggerMiddleware(log)(mux)
-
-	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", restPort),
-		Handler:      loggedMux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-	}
+func New(log *slog.Logger, restPort int, service service.BillingService) *App {
+	restapp := restapp.New(log, restPort, service)
 
 	return &App{
-		server: server,
-		port:   restPort,
-		log:    log,
+		RESTSrv: restapp,
 	}
 }

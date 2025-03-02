@@ -6,6 +6,7 @@ import (
 
 	"github.com/Oxeeee/bank-microservices/billing/internal/config"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 func InitDB(cfg *config.Config) *sqlx.DB {
@@ -15,7 +16,8 @@ func InitDB(cfg *config.Config) *sqlx.DB {
 		cfg.Database.Address,
 		cfg.Database.Port,
 		cfg.Database.Name,
-		cfg.Database.SSLMode)
+		// cfg.Database.SSLMode)
+		"disable")
 	DB, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatalf("error while connecting DB: %v", err)

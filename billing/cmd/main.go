@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/Oxeeee/bank-microservices/billing/internal/app"
 	"github.com/Oxeeee/bank-microservices/billing/internal/config"
 	"github.com/Oxeeee/bank-microservices/billing/internal/db"
 	"github.com/Oxeeee/bank-microservices/billing/internal/repo"
@@ -29,8 +30,9 @@ func main() {
 	dbRepo := repo.NewBillingRepository(database)
 
 	service := service.NewBillingService(log, cfg, dbRepo, cacheRepo)
-	
-	
+
+	application := app.New(log, cfg.RESTPort, service)
+	application.RESTSrv.MustRun()
 }
 
 func setupLogger(env string) *slog.Logger {

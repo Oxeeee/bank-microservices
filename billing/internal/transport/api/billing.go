@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -8,6 +9,7 @@ import (
 )
 
 type BillingHandler interface {
+	Register(w http.ResponseWriter, r *http.Request)
 }
 
 type billingHandler struct {
@@ -22,6 +24,14 @@ func NewBillingHandler(log *slog.Logger, service service.BillingService) Billing
 	}
 }
 
-func (h *billingHandler) Register(w http.ResponseWriter, r *http.Request) {
+type Response struct {
+	Message string
+}
 
+func (h *billingHandler) Register(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	resp := Response{Message: "Hello world!"}
+	json.NewEncoder(w).Encode(resp)
 }
