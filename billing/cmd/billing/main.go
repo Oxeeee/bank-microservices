@@ -27,7 +27,7 @@ func main() {
 	redis := db.InitRedis(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
 
 	cacheRepo := repo.NewBillingCache(redis)
-	dbRepo := repo.NewBillingRepository(database)
+	dbRepo := repo.NewBillingRepository(database, log)
 
 	service := service.NewBillingService(log, cfg, dbRepo, cacheRepo)
 

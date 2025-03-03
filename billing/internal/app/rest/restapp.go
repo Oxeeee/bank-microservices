@@ -21,7 +21,7 @@ func New(log *slog.Logger, restPort int, service service.BillingService) *App {
 	billingHandler := api.NewBillingHandler(log, service)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /register", billingHandler.Register)
+	mux.HandleFunc("POST /pay", billingHandler.Pay)
 
 	loggedMux := loggerinterceptors.LoggerMiddleware(log)(mux)
 

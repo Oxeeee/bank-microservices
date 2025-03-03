@@ -1,43 +1,49 @@
 package repo
 
 import (
-	"log"
+	"log/slog"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/Oxeeee/bank-microservices/billing/internal/models/domain"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
 type BillingRepository interface {
+	GetUserByID(uuid uuid.UUID) (*domain.User, error)
 }
 
 type billingRepo struct {
-	db *sqlx.DB
+	db  *sqlx.DB
+	log *slog.Logger
 }
 
-func NewBillingRepository(db *sqlx.DB) BillingRepository {
+var sqb = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+
+func NewBillingRepository(db *sqlx.DB, log *slog.Logger) BillingRepository {
 	return &billingRepo{
-		db: db,
+		db:  db,
+		log: log,
 	}
 }
 
-type User struct {
-	ID   int    `db:"id"`
-	Name string `db:"name"`
-}
-
-func (r *billingRepo) GetActiveUsers() ([]User, error) {
-	query, args, _ := sq.
-		Select("id", "name").
+func (r *billingRepo) GetUserByID(uuid uuid.UUID) (*domain.User, error) {
+	const op = "repo.GetUserByID"
+	log := slog.With(
+		slog.String("op", op),
+	)
+	query, args, _ := sqb.
+		Select("*").
 		From("users").
-		Where(sq.Eq{"status": "active"}).
+		Where(sq.Eq{"id": uuid.String()}).
 		ToSql()
 
-	var users []User
-	err := r.db.Select(&users, query, args...)
+	var user domain.User
+	err := r.db.Get(&user, query, args...)
 	if err != nil {
-		log.Printf("Ошибка при получении пользователей: %v", err)
+		log.Error("error while get user", "error", err)
 		return nil, err
 	}
 
-	return users, nil
+	return &user, err
 }

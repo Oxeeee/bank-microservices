@@ -22,6 +22,5 @@ func InitDB(cfg *config.Config) *sqlx.DB {
 	if err != nil {
 		log.Fatalf("error while connecting DB: %v", err)
 	}
-
 	return DB
 }

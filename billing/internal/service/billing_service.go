@@ -4,10 +4,14 @@ import (
 	"log/slog"
 
 	"github.com/Oxeeee/bank-microservices/billing/internal/config"
+	"github.com/Oxeeee/bank-microservices/billing/internal/models/domain"
 	"github.com/Oxeeee/bank-microservices/billing/internal/repo"
+	"github.com/google/uuid"
 )
 
 type BillingService interface {
+	// GetUserByID — takes uuid and return model of user and error
+	GetUserByID(uuid uuid.UUID) (*domain.User, error)
 }
 
 type billingService struct {
@@ -17,6 +21,7 @@ type billingService struct {
 	cache repo.BillingCache
 }
 
+// NewBillingService create new example of billingService structure
 func NewBillingService(log *slog.Logger, cfg *config.Config, repo repo.BillingRepository, cache repo.BillingCache) BillingService {
 	return &billingService{
 		log:   log,
@@ -26,3 +31,12 @@ func NewBillingService(log *slog.Logger, cfg *config.Config, repo repo.BillingRe
 	}
 }
 
+// GetUserByID — takes uuid and return model of user and error
+func (s *billingService) GetUserByID(uuid uuid.UUID) (*domain.User, error) {
+	user, err := s.repo.GetUserByID(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
