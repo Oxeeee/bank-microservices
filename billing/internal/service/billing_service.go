@@ -4,7 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/Oxeeee/bank-microservices/billing/internal/config"
-	"github.com/Oxeeee/bank-microservices/billing/internal/models/domain"
+
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/requests"
 	"github.com/Oxeeee/bank-microservices/billing/internal/repo"
 	"github.com/google/uuid"
@@ -12,7 +12,6 @@ import (
 
 type BillingService interface {
 	// GetUserByID — takes uuid and return model of user and error
-	GetUserByID(uuid uuid.UUID) (*domain.User, error)
 
 	Pay(req *requests.BillPayment) (uuid.UUID, error)
 }
@@ -37,15 +36,23 @@ func NewBillingService(log *slog.Logger, cfg *config.Config, repo repo.BillingRe
 }
 
 // GetUserByID — takes uuid and return model of user and error
-func (s *billingService) GetUserByID(uuid uuid.UUID) (*domain.User, error) {
-	user, err := s.repo.GetUserByID(uuid)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
 
 func (s *billingService) Pay(req *requests.BillPayment) (uuid.UUID, error) {
-	return s.repo.ProcessPayment(req)
+	paymentID, err := s.repo.ProcessPayment(req)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	bill, err := s.repo.GetPaymentByID(paymentID)
+	if err != nil {
+		s.log.Error("error while get payment by id", "error", err)
+		return paymentID, nil
+	}
+
+	err = s.kafka.SendPaymentStatus(bill)
+	if err != nil {
+		s.log.Error("error while send message to kafka", "error", err)
+		return paymentID, nil
+	}
+	return paymentID, nil
 }

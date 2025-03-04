@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
@@ -14,7 +15,7 @@ import (
 )
 
 type BillingRepository interface {
-	GetUserByID(uuid uuid.UUID) (*domain.User, error)
+	GetPaymentByID(uuid uuid.UUID) (*domain.BillPayment, error)
 	ProcessPayment(req *requests.BillPayment) (uuid.UUID, error)
 }
 
@@ -31,31 +32,33 @@ func NewBillingRepository(db *sqlx.DB, log *slog.Logger) BillingRepository {
 		log: log,
 	}
 }
+func (r *billingRepo) GetPaymentByID(uuid uuid.UUID) (*domain.BillPayment, error) {
+	const op = "repo.GetPaymentByID"
+	log := r.log.With(slog.String("op", op))
 
-func (r *billingRepo) GetUserByID(uuid uuid.UUID) (*domain.User, error) {
-	const op = "repo.GetUserByID"
-	log := r.log.With(
-		slog.String("op", op),
-	)
 	query, args, _ := sqb.
-		Select("*").
-		From("users").
-		Where(sq.Eq{"id": uuid.String()}).
+		Select("id, user_id, provider, amount, currency, details, status, created_at, updated_at").
+		From("bill_payments").
+		Where(sq.Eq{"id": uuid}).
 		ToSql()
 
-	var user domain.User
-	err := r.db.Get(&user, query, args...)
+	var bill domain.BillPayment
+	err := r.db.Get(&bill, query, args...)
 	if err != nil {
-		log.Error("error while get user", "error", err)
+		log.Error("error while get bill by id", "error", err)
 		return nil, err
 	}
 
-	return &user, err
+	return &bill, nil
 }
+
 func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, error) {
 	const op = "repo.processPayment"
 	log := r.log.With(slog.String("op", op))
-	tx, err := r.db.DB.Begin()
+
+	ctx := context.Background()
+
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		log.Error("cannot start transaction", "error", err)
 		return uuid.Nil, err
@@ -68,7 +71,8 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 		Where(sq.Eq{"id": req.UserID}).
 		ToSql()
 
-	if err := tx.QueryRow(query, args...).Scan(&user.ID, &user.Balance); err != nil {
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.Balance)
+	if err != nil {
 		tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
 			log.Debug("user not found", "userID", req.UserID)
@@ -79,40 +83,46 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 	}
 
 	if user.Balance < req.Amount {
-		log.Debug("user balance have insufficient money", "user_balance", user.Balance, "amount", req.Amount)
+		log.Debug("user balance insufficient", "user_balance", user.Balance, "amount", req.Amount)
 		tx.Rollback()
 		return uuid.Nil, errors.New("insufficient balance")
 	}
 
-	query, args, _ = sqb.Update("users").Set("balance", user.Balance-req.Amount).Where(sq.Eq{"id": user.ID}).ToSql()
+	// Обновляем баланс пользователя
+	query, args, _ = sqb.Update("users").
+		Set("balance", user.Balance-req.Amount).
+		Where(sq.Eq{"id": user.ID}).
+		ToSql()
 
-	_, err = tx.Exec(query, args...)
+	_, err = tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		log.Error("cannot update user balance", "error", err, "userID", req.UserID)
 		tx.Rollback()
 		return uuid.Nil, err
 	}
 
+	// Вставляем запись о платеже в таблицу bill_payments
 	var paymentID uuid.UUID
 	query, args, _ = sqb.Insert("bill_payments").
-		Columns("user_id, provider, amount, currency, details, created_at, updated_at").
-		Values(user.ID, req.Provider, req.Amount, req.Currency, req.Details, time.Now(), time.Now()).
+		Columns("user_id, provider, amount, currency, details, status, created_at, updated_at").
+		Values(user.ID, req.Provider, req.Amount, req.Currency, req.Details, "pending", time.Now(), time.Now()).
 		Suffix("RETURNING id").
 		ToSql()
 
-	err = tx.QueryRow(query, args...).Scan(&paymentID)
+	err = tx.QueryRowContext(ctx, query, args...).Scan(&paymentID)
 	if err != nil {
-		log.Error("cannot insert transaction to bill_payments", "error", err)
+		log.Error("cannot insert transaction into bill_payments", "error", err)
 		tx.Rollback()
 		return uuid.Nil, err
 	}
 
+	// Фиксируем транзакцию
 	err = tx.Commit()
 	if err != nil {
 		log.Error("cannot commit transaction", "error", err)
 		return uuid.Nil, err
 	}
 
-	log.Info("Payment processed successfully for user", "userID", user.ID, "paymentID", paymentID)
+	log.Info("Payment processed successfully", "userID", user.ID, "paymentID", paymentID)
 	return paymentID, nil
 }

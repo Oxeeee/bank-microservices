@@ -9,14 +9,15 @@ import (
 )
 
 type BillPayment struct {
-	ID        uuid.UUID       `json:"id"`
-	UserID    uuid.UUID       `json:"user_id"`
-	Provider  string          `json:"provider"`
-	Amount    float64         `json:"amount"`
-	Status    string          `json:"status"`
-	Details   json.RawMessage `json:"details,omitempty"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	ID        uuid.UUID       `json:"id" db:"id"`
+	UserID    uuid.UUID       `json:"user_id" db:"user_id"`
+	Provider  string          `json:"provider" db:"provider"`
+	Amount    float64         `json:"amount" db:"amount"`
+	Currency  string          `json:"currency" db:"currency"` // добавлено поле валюты
+	Status    string          `json:"status" db:"status"`
+	Details   json.RawMessage `json:"details,omitempty" db:"details"`
+	CreatedAt time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 type User struct {
