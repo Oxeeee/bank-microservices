@@ -13,3 +13,4 @@ type BillPayment struct {
 	Currency string          `json:"currency"`
 	Details  json.RawMessage `json:"details,omitempty"`
 }
+

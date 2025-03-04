@@ -46,9 +46,8 @@ func (a *App) MustRun() {
 		slog.Int("port", a.port),
 	)
 
+	log.Info("REST server is running")
 	if err := a.server.ListenAndServe(); err != nil {
 		panic(err)
 	}
-
-	log.Info("REST server is running")
 }

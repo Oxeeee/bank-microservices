@@ -22,15 +22,17 @@ type billingService struct {
 	cfg   *config.Config
 	repo  repo.BillingRepository
 	cache repo.BillingCache
+	kafka repo.BillingKafkaRepo
 }
 
 // NewBillingService create new example of billingService structure
-func NewBillingService(log *slog.Logger, cfg *config.Config, repo repo.BillingRepository, cache repo.BillingCache) BillingService {
+func NewBillingService(log *slog.Logger, cfg *config.Config, repo repo.BillingRepository, cache repo.BillingCache, kafka repo.BillingKafkaRepo) BillingService {
 	return &billingService{
 		log:   log,
 		cfg:   cfg,
 		repo:  repo,
 		cache: cache,
+		kafka: kafka,
 	}
 }
 

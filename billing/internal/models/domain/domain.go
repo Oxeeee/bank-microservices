@@ -9,22 +9,14 @@ import (
 )
 
 type BillPayment struct {
-	ID            uuid.UUID       `json:"id"`
-	UserID        uuid.UUID       `json:"user_id"`
-	Provider      string          `json:"provider"`
-	Amount        float64         `json:"amount"`
-	Currency      string          `json:"currency"`
-	Status        string          `json:"status"`
-	Details       json.RawMessage `json:"details,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
-}
-
-type Provider struct {
-	ID     uuid.UUID `json:"id"`
-	Name   string    `json:"name"`
-	Type   string    `json:"type"`
-	Active bool      `json:"active"`
+	ID        uuid.UUID       `json:"id"`
+	UserID    uuid.UUID       `json:"user_id"`
+	Provider  string          `json:"provider"`
+	Amount    float64         `json:"amount"`
+	Status    string          `json:"status"`
+	Details   json.RawMessage `json:"details,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 type User struct {

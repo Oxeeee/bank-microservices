@@ -19,20 +19,32 @@ const (
 
 func main() {
 	cfg := config.MustLoad()
-
 	log := setupLogger(cfg.Env)
 	log.Info("starting application")
 
 	database := db.InitDB(cfg)
+	log.Info("connected to database")
+
 	redis := db.InitRedis(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
+	log.Info("connected to redis")
+
+	producer := db.InitKafka(cfg.Kafka.Brokers)
+	log.Info("connected to kafka")
+
+	dbRepo := repo.NewBillingRepository(database, log)
+	log.Info("initialized dbRepo")
 
 	cacheRepo := repo.NewBillingCache(redis)
-	dbRepo := repo.NewBillingRepository(database, log)
+	log.Info("initialized redisRepo")
 
-	service := service.NewBillingService(log, cfg, dbRepo, cacheRepo)
+	kafkaRepo := repo.NewBillingKafkaRepo(producer, cfg.Kafka.Topic, log)
+
+	service := service.NewBillingService(log, cfg, dbRepo, cacheRepo, kafkaRepo)
+	log.Info("initialized service")
 
 	application := app.New(log, cfg.RESTPort, service)
 	application.RESTSrv.MustRun()
+	log.Info("started")
 }
 
 func setupLogger(env string) *slog.Logger {
