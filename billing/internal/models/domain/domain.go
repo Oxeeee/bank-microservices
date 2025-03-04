@@ -14,7 +14,6 @@ type BillPayment struct {
 	Provider      string          `json:"provider"`
 	Amount        float64         `json:"amount"`
 	Currency      string          `json:"currency"`
-	PaymentMethod string          `json:"payment_method"`
 	Status        string          `json:"status"`
 	Details       json.RawMessage `json:"details,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`

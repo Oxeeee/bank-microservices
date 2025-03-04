@@ -5,6 +5,7 @@ import (
 
 	"github.com/Oxeeee/bank-microservices/billing/internal/config"
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/domain"
+	"github.com/Oxeeee/bank-microservices/billing/internal/models/requests"
 	"github.com/Oxeeee/bank-microservices/billing/internal/repo"
 	"github.com/google/uuid"
 )
@@ -12,6 +13,8 @@ import (
 type BillingService interface {
 	// GetUserByID — takes uuid and return model of user and error
 	GetUserByID(uuid uuid.UUID) (*domain.User, error)
+
+	Pay(req *requests.BillPayment) (uuid.UUID, error)
 }
 
 type billingService struct {
@@ -39,4 +42,8 @@ func (s *billingService) GetUserByID(uuid uuid.UUID) (*domain.User, error) {
 	}
 
 	return user, nil
+}
+
+func (s *billingService) Pay(req *requests.BillPayment) (uuid.UUID, error) {
+	return s.repo.ProcessPayment(req)
 }

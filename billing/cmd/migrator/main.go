@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -11,10 +12,11 @@ import (
 )
 
 func main() {
-	var dsn, migrationsPath string
+	var dsn, migrationsPath, vector string
 
 	flag.StringVar(&dsn, "dsn", "", "conntection to database")
 	flag.StringVar(&migrationsPath, "migrations-path", "", "path to migrations")
+	flag.StringVar(&vector, "vector", "up", "up or down migrate")
 
 	flag.Parse()
 
@@ -31,13 +33,28 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := m.Up(); err != nil {
-		if errors.Is(err, migrate.ErrNoChange) {
-			log.Println("no changes to apply")
-			return
-		}
 
-		log.Fatal(err)
+	switch vector {
+	case "up":
+		if err := m.Up(); err != nil {
+			if errors.Is(err, migrate.ErrNoChange) {
+				log.Println("no changes to apply")
+				return
+			}
+
+			log.Fatal(err)
+		}
+	case "down":
+		if err := m.Down(); err != nil {
+			if errors.Is(err, migrate.ErrNoChange) {
+				log.Println("no changes to apply")
+				return
+			}
+
+			log.Fatal(err)
+		}
+	default:
+		log.Fatal(fmt.Sprintf("unexpected vector: %v,\n allowed: `up` or `down`", vector))
 	}
 
 	log.Println("migrations apply successfully")

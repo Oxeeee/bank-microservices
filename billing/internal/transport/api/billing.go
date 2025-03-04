@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
-	"io"
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/requests"
+	"github.com/Oxeeee/bank-microservices/billing/internal/models/responses"
 	"github.com/Oxeeee/bank-microservices/billing/internal/service"
+	jsonwrap "github.com/Oxeeee/bank-microservices/billing/pkg/request_json"
 	reqvalidator "github.com/Oxeeee/bank-microservices/billing/pkg/request_validator"
 )
 
@@ -28,20 +30,13 @@ func NewBillingHandler(log *slog.Logger, service service.BillingService) Billing
 }
 
 func (h *billingHandler) Pay(w http.ResponseWriter, r *http.Request) {
-	// TODO: вместо прямого запроса из нашего микросервиса — поход в auth за юзером (зарефачь все слои и удали нах все че не нужно)
+	const op = "handler.pay"
+	log := h.log.With(slog.String("op", op))
 	var req requests.BillPayment
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "error while reading request", http.StatusBadRequest)
-		return
-	}
-
-	defer r.Body.Close()
-
-	err = json.Unmarshal(body, &req)
-	if err != nil {
-		http.Error(w, "Error while parse JSON", http.StatusBadRequest)
+	if err := jsonwrap.Unwrap(&req, r); err != nil {
+		log.Info("bad request", "error", err)
+		http.Error(w, "can not unmarshall json", http.StatusBadRequest)
 		return
 	}
 
@@ -50,13 +45,25 @@ func (h *billingHandler) Pay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.service.GetUserByID(req.UserID)
+	paymentID, err := h.service.Pay(&req)
 	if err != nil {
-		http.Error(w, "error while get user by id", http.StatusInternalServerError)
+		if errors.Is(err, errors.New("user not found")) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, errors.New("insufficient balance")) {
+			http.Error(w, "insufficient balance", http.StatusPaymentRequired)
+			return
+		}
+
+		http.Error(w, "unexpected error", http.StatusInternalServerError)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(user); err != nil {
-		http.Error(w, "error while encoding json", http.StatusInternalServerError)
+
+	var resp = responses.PaymentResponse{PaymentID: paymentID}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "error while encoding json", http.StatusOK)
 		return
 	}
 }
