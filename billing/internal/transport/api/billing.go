@@ -2,10 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 
+	custerrors "github.com/Oxeeee/bank-microservices/billing/internal/models/errors"
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/requests"
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/responses"
 	"github.com/Oxeeee/bank-microservices/billing/internal/service"
@@ -47,12 +47,12 @@ func (h *billingHandler) Pay(w http.ResponseWriter, r *http.Request) {
 
 	paymentID, err := h.service.Pay(&req)
 	if err != nil {
-		if errors.Is(err, errors.New("user not found")) {
+		if err == custerrors.ErrUserNotFound {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 
-		if errors.Is(err, errors.New("insufficient balance")) {
+		if err == custerrors.ErrInsufficientBalance {
 			http.Error(w, "insufficient balance", http.StatusPaymentRequired)
 			return
 		}

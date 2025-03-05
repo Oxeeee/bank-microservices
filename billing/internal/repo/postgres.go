@@ -9,6 +9,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/domain"
+	custerrors "github.com/Oxeeee/bank-microservices/billing/internal/models/errors"
 	"github.com/Oxeeee/bank-microservices/billing/internal/models/requests"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -76,7 +77,7 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 		tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
 			log.Debug("user not found", "userID", req.UserID)
-			return uuid.Nil, errors.New("user not found")
+			return uuid.Nil, custerrors.ErrUserNotFound
 		}
 		log.Error("cannot select user by ID", "error", err, "userID", req.UserID)
 		return uuid.Nil, err
@@ -85,7 +86,7 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 	if user.Balance < req.Amount {
 		log.Debug("user balance insufficient", "user_balance", user.Balance, "amount", req.Amount)
 		tx.Rollback()
-		return uuid.Nil, errors.New("insufficient balance")
+		return uuid.Nil, custerrors.ErrInsufficientBalance
 	}
 
 	// Обновляем баланс пользователя
