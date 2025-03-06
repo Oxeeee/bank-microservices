@@ -1,0 +1,10 @@
+env: dev
+kafka:
+  brokers: ["kafka:9092"]
+  topics: ["billing_topic"]
+  address: kafka
+  port: 9092
+  group: "notification_service_group"
+websocket:
+  host: localhost
+  port: 8080

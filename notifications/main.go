@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/IBM/sarama"
+	"github.com/Oxeeee/bank-microservices/notifications/config"
 	"github.com/gorilla/websocket"
 )
 
@@ -26,14 +27,14 @@ var (
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("cannot upgrade:", err)
+		Log.Error("cannot upgrade", "error", err)
 		return
 	}
 
 	clientsMu.Lock()
 	clients[conn] = true
 	clientsMu.Unlock()
-	log.Println("new client connected")
+	Log.Debug("new client connected")
 
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
@@ -45,7 +46,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	delete(clients, conn)
 	clientsMu.Unlock()
 	conn.Close()
-	log.Println("client disconnected")
+	Log.Debug("client disconnected")
 }
 
 func broadcastMessage(data []byte) {
@@ -53,7 +54,7 @@ func broadcastMessage(data []byte) {
 	defer clientsMu.Unlock()
 	for conn := range clients {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Println("error while sending message:", err)
+			Log.Error("error while sending message", "error", err)
 			conn.Close()
 			delete(clients, conn)
 		}
@@ -75,19 +76,18 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 		var data map[string]interface{}
 		err := json.Unmarshal(message.Value, &data)
 		if err != nil {
-			log.Printf("cannot deserialization: %v", err)
+			Log.Error("cannot serizalize", "error", err)
 			continue
 		}
-		
-		fmt.Printf("received new message from topic '%s': %v\n", message.Topic, data)
-		
+
+		Log.Debug("received message", "topic", message.Topic, "data", string(message.Value))
+
 		broadcastMessage(message.Value)
-		
+
 		session.MarkMessage(message, "")
 	}
 	return nil
 }
-
 
 func startKafkaConsumer(ctx context.Context, brokers []string, groupID string, topics []string) {
 	config := sarama.NewConfig()
@@ -97,7 +97,8 @@ func startKafkaConsumer(ctx context.Context, brokers []string, groupID string, t
 	consumer := &Consumer{}
 	client, err := sarama.NewConsumerGroup(brokers, groupID, config)
 	if err != nil {
-		log.Fatalf("error while creating consumer group: %v", err)
+		Log.Error("error while creating consumer group", "error", err)
+		panic(err)
 	}
 
 	go func() {
@@ -105,9 +106,9 @@ func startKafkaConsumer(ctx context.Context, brokers []string, groupID string, t
 		for {
 			err := client.Consume(ctx, topics, consumer)
 			if err != nil {
-				log.Fatalf("error while consuming messages: %v", err)
+				Log.Error("error while consuming messages", "error", err)
 			}
-			
+
 			if ctx.Err() != nil {
 				return
 			}
@@ -115,10 +116,33 @@ func startKafkaConsumer(ctx context.Context, brokers []string, groupID string, t
 	}()
 }
 
+const (
+	envLocal = "local"
+	envDev   = "dev"
+	envProd  = "prod"
+)
+
+var Log *slog.Logger
+
+func setupLogger(env string) {
+
+	switch env {
+	case envLocal:
+		Log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	case envDev:
+		Log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	case envProd:
+		Log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	}
+}
+
 func main() {
-	brokers := []string{"localhost:9092"}
-	groupID := "notification_service_group"
-	topics := []string{"auth_topic", "transaction_topic", "billing_topic"}
+	cfg := config.MustLoad()
+	setupLogger(cfg.Env)
+
+	brokers := cfg.Kafka.Brokers
+	groupID := cfg.Kafka.ConsumerGroupID
+	topics := cfg.Kafka.Topics
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -127,13 +151,13 @@ func main() {
 
 	http.HandleFunc("/ws", wsHandler)
 	go func() {
-		log.Println("Websocket server started :8080")
-		if err := http.ListenAndServe(":8080", nil); err != nil {
-			log.Fatalf("HTTP Server error: %v", err)
+		Log.Info("HTTP server started", "host", fmt.Sprintf("%v:%v", cfg.WebSocket.Host, cfg.WebSocket.Port))
+		if err := http.ListenAndServe(fmt.Sprintf(":%v", cfg.WebSocket.Port), nil); err != nil {
+			panic("http server error: " + err.Error())
 		}
 	}()
 
-	log.Println("Notification Service started. Listening Kafka-topics and WebSocket conns...")
+	Log.Info("Notification Service started. Listening Kafka-topics and WebSocket conns...")
 
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGINT, syscall.SIGTERM)

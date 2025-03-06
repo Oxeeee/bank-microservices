@@ -1,0 +1,10 @@
+env: local
+kafka:
+  brokers: ["localhost:9092"]
+  topics: ["billing_topic"]
+  address: localhost
+  port: 9092
+  consumergroupid: notification_group
+websocket:
+  host: localhost
+  port: 8080
