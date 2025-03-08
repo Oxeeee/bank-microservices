@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"time"
+
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -50,6 +52,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func broadcastMessage(data []byte) {
+
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 	for conn := range clients {
@@ -71,18 +74,41 @@ func (consumer *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 	return nil
 }
 
+type KafkaMessage map[string]any
+
+type WSMessage struct {
+	Topic     string       `json:"topic"`
+	Timestamp time.Time    `json:"timestamp"`
+	Data      KafkaMessage `json:"data"`
+}
+
+func transformMessage(topic string, kafkaMSG KafkaMessage) WSMessage {
+	return WSMessage{
+		Timestamp: time.Now(),
+		Topic:     topic,
+		Data:      kafkaMSG,
+	}
+}
+
 func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		var data map[string]interface{}
-		err := json.Unmarshal(message.Value, &data)
-		if err != nil {
-			Log.Error("cannot serizalize", "error", err)
-			continue
-		}
-
 		Log.Debug("received message", "topic", message.Topic, "data", string(message.Value))
 
-		broadcastMessage(message.Value)
+		var kafkaMsg KafkaMessage
+		if err := json.Unmarshal(message.Value, &kafkaMsg); err != nil {
+			Log.Error("cannot unmarhal kafka message", "error", err)
+			return err
+		}
+
+		wsm := transformMessage(message.Topic, kafkaMsg)
+
+		wsJSON, err := json.Marshal(wsm)
+		if err != nil {
+			Log.Error("cannot marshal ws json message", "error", err)
+			return err
+		}
+
+		broadcastMessage(wsJSON)
 
 		session.MarkMessage(message, "")
 	}
