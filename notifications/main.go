@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"text/template"
 	"time"
 
 	"fmt"
@@ -25,6 +26,20 @@ var (
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 )
+
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("templates/index.html")
+	if err != nil {
+		Log.Error("cannot parse template", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.Execute(w, nil); err != nil {
+		Log.Error("cannot execute template", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -176,6 +191,8 @@ func main() {
 	startKafkaConsumer(ctx, brokers, groupID, topics)
 
 	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/", indexHandler)
+
 	go func() {
 		Log.Info("HTTP server started", "host", fmt.Sprintf("%v:%v", cfg.WebSocket.Host, cfg.WebSocket.Port))
 		if err := http.ListenAndServe(fmt.Sprintf(":%v", cfg.WebSocket.Port), nil); err != nil {

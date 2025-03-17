@@ -18,6 +18,7 @@ import (
 type BillingRepository interface {
 	GetPaymentByID(uuid uuid.UUID) (*domain.BillPayment, error)
 	ProcessPayment(req *requests.BillPayment) (uuid.UUID, error)
+	UpdateStatus(paymentID uuid.UUID, status string) (*domain.BillPayment, error)
 }
 
 type billingRepo struct {
@@ -89,7 +90,6 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 		return uuid.Nil, custerrors.ErrInsufficientBalance
 	}
 
-	// Обновляем баланс пользователя
 	query, args, _ = sqb.Update("users").
 		Set("balance", user.Balance-req.Amount).
 		Where(sq.Eq{"id": user.ID}).
@@ -102,7 +102,6 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 		return uuid.Nil, err
 	}
 
-	// Вставляем запись о платеже в таблицу bill_payments
 	var paymentID uuid.UUID
 	query, args, _ = sqb.Insert("bill_payments").
 		Columns("user_id, provider, amount, currency, details, status, created_at, updated_at").
@@ -117,7 +116,6 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 		return uuid.Nil, err
 	}
 
-	// Фиксируем транзакцию
 	err = tx.Commit()
 	if err != nil {
 		log.Error("cannot commit transaction", "error", err)
@@ -126,4 +124,48 @@ func (r *billingRepo) ProcessPayment(req *requests.BillPayment) (uuid.UUID, erro
 
 	log.Info("Payment processed successfully", "userID", user.ID, "paymentID", paymentID)
 	return paymentID, nil
+}
+func (r *billingRepo) UpdateStatus(paymentID uuid.UUID, status string) (*domain.BillPayment, error) {
+	const op = "postgres.updateStatus"
+	log := r.log.With(slog.String("op", op))
+
+	ctx := context.Background()
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		log.Error("error while starting transation", "error", err)
+		return nil, err
+	}
+
+	query, args, _ := sqb.Select("*").From("bill_payments").Where(sq.Eq{"id": paymentID}).ToSql()
+
+	var payment domain.BillPayment
+	err = r.db.Get(&payment, query, args...)
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Debug("payment not found")
+			return nil, custerrors.ErrPaymentNotFound
+		}
+		log.Error("error while get payment", "error", err)
+		return nil, err
+	}
+
+	query, args, _ = sqb.Update("bill_payments").Set("status", status).Set("updated_at", time.Now()).Where(sq.Eq{"id": paymentID}).ToSql()
+
+	_, err = tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		tx.Rollback()
+		log.Error("error while update status", "error", err)
+		return nil, err
+	}
+
+	payment.Status = status
+
+	err = tx.Commit()
+	if err != nil {
+		log.Error("cannot commit transaction", "error", err)
+		return nil, err
+	}
+
+	return &payment, nil
 }

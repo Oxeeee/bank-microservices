@@ -15,6 +15,7 @@ WORKDIR /app
 
 COPY --from=builder /app/app .
 COPY configs/dev.yaml /app/configs/dev.yaml
+COPY templates/ /app/templates
 
 ENV CONFIG_PATH=/app/configs/dev.yaml
 

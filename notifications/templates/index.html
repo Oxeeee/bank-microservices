@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Kafka Messages</title>
+        <style>
+            html {
+                font-family: Arial, Helvetica, sans-serif;
+            }
+            .message-container {
+                max-width: 800px;
+                margin: 20px auto;
+                font-family: Arial, sans-serif;
+            }
+
+            .message {
+                border: 1px solid #ddd;
+                margin: 10px 0;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+
+            .message-header {
+                background: #f5f5f5;
+                padding: 10px;
+                cursor: pointer;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .message-header:hover {
+                background: #e0e0e0;
+            }
+
+            .message-content {
+                padding: 10px;
+                display: none;
+                background: white;
+            }
+
+            .message-content pre {
+                margin: 0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+
+            .timestamp {
+                color: #666;
+                font-size: 0.9em;
+            }
+
+            .connection-status {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                padding: 5px 10px;
+                border-radius: 3px;
+            }
+
+            .connected {
+                background: #d4edda;
+                color: #155724;
+            }
+
+            .disconnected {
+                background: #f8d7da;
+                color: #721c24;
+            }
+
+            .filters {
+                margin: 20px auto;
+                max-width: 800px;
+                padding: 10px;
+                background: #f0f0f0;
+                border-radius: 4px;
+            }
+
+            .filter-checkbox {
+                margin-right: 15px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="connection-status disconnected">Disconnected</div>
+        <div class="filters">
+            <label class="filter-checkbox">
+                <input type="checkbox" value="billing_topic" checked /> Billing
+            </label>
+            <label class="filter-checkbox">
+                <input type="checkbox" value="auth_topic" checked /> Auth
+            </label>
+            <label class="filter-checkbox">
+                <input type="checkbox" value="transaction_topic" checked />
+                Transaction
+            </label>
+        </div>
+        <div class="message-container" id="messages"></div>
+
+        <script>
+            const messagesContainer = document.getElementById("messages");
+            const statusElement = document.querySelector(".connection-status");
+            const filterCheckboxes = document.querySelectorAll(
+                '.filters input[type="checkbox"]',
+            );
+            let ws;
+            let activeFilters = new Set([
+                "billing_topic",
+                "auth_topic",
+                "transaction_topic",
+            ]);
+
+            function connectWebSocket() {
+                ws = new WebSocket("ws://localhost:8080/ws");
+
+                ws.onopen = () => {
+                    console.log("Connected to WebSocket");
+                    statusElement.textContent = "Connected";
+                    statusElement.classList.remove("disconnected");
+                    statusElement.classList.add("connected");
+                };
+
+                ws.onmessage = (event) => {
+                    console.log("Raw message received:", event.data); // Отладочный вывод сырого сообщения
+                    try {
+                        const message = JSON.parse(event.data);
+                        console.log("Parsed message:", message); // Отладочный вывод распаршенного сообщения
+                        if (activeFilters.has(message.topic)) {
+                            console.log(
+                                "Message passed filter, adding to DOM:",
+                                message,
+                            );
+                            addMessage(message);
+                        } else {
+                            console.log("Message filtered out:", message.topic);
+                        }
+                    } catch (error) {
+                        console.error("Error parsing message:", error);
+                    }
+                };
+
+                ws.onclose = () => {
+                    console.log("Disconnected from WebSocket");
+                    statusElement.textContent = "Disconnected";
+                    statusElement.classList.remove("connected");
+                    statusElement.classList.add("disconnected");
+                    setTimeout(connectWebSocket, 2000);
+                };
+
+                ws.onerror = (error) => {
+                    console.error("WebSocket error:", error);
+                };
+            }
+
+            function addMessage(message) {
+                console.log("Adding message to DOM:", message);
+                const messageElement = document.createElement("div");
+                messageElement.className = "message";
+                messageElement.dataset.topic = message.topic;
+
+                const header = document.createElement("div");
+                header.className = "message-header";
+                header.innerHTML = `
+                    <span>${message.topic || "Unknown topic"}</span>
+                    <span class="timestamp">${message.timestamp ? new Date(message.timestamp).toLocaleString() : "No timestamp"}</span>
+                `;
+
+                const content = document.createElement("div");
+                content.className = "message-content";
+                content.innerHTML = `
+                    <pre>${JSON.stringify(message.data || {}, null, 2)}</pre>
+                `;
+
+                messageElement.appendChild(header);
+                messageElement.appendChild(content);
+
+                header.addEventListener("click", () => {
+                    content.style.display =
+                        content.style.display === "block" ? "none" : "block";
+                });
+
+                messagesContainer.insertBefore(
+                    messageElement,
+                    messagesContainer.firstChild,
+                );
+                console.log(
+                    "Message added to DOM, container children:",
+                    messagesContainer.children.length,
+                );
+            }
+
+            function updateMessageVisibility() {
+                const messages = messagesContainer.querySelectorAll(".message");
+                console.log(
+                    "Updating visibility, total messages:",
+                    messages.length,
+                );
+                messages.forEach((message) => {
+                    const topic = message.dataset.topic;
+                    message.style.display = activeFilters.has(topic)
+                        ? "block"
+                        : "none";
+                });
+            }
+
+            filterCheckboxes.forEach((checkbox) => {
+                checkbox.addEventListener("change", () => {
+                    if (checkbox.checked) {
+                        activeFilters.add(checkbox.value);
+                    } else {
+                        activeFilters.delete(checkbox.value);
+                    }
+                    console.log(
+                        "Active filters updated:",
+                        Array.from(activeFilters),
+                    );
+                    updateMessageVisibility();
+                });
+            });
+
+            connectWebSocket();
+        </script>
+    </body>
+</html>
